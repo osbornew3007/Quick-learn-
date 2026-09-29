@@ -279,14 +279,7 @@ main { flex: 1; min-height: 0; position: relative; }
   }
 
   /* ---------- pdf -> snippets ---------- */
-  function pageToText(items) {
-    const lines = []; let line = '';
-    for (const it of items) {
-      if (typeof it.str !== 'string') continue;
-      line += it.str;
-      if (it.hasEOL) { lines.push(line); line = ''; }
-    }
-    if (line) lines.push(line);
+  function linesToText(lines) {
     let out = '';
     for (let l of lines) {
       l = l.trim();
@@ -295,6 +288,16 @@ main { flex: 1; min-height: 0; position: relative; }
       else out += (out ? ' ' : '') + l;
     }
     return out;
+  }
+  function pageToText(items) {
+    const lines = []; let line = '';
+    for (const it of items) {
+      if (typeof it.str !== 'string') continue;
+      line += it.str;
+      if (it.hasEOL) { lines.push(line); line = ''; }
+    }
+    if (line) lines.push(line);
+    return linesToText(lines);
   }
   function good(t) {
     const words = t.split(/\s+/).length;
@@ -337,9 +340,22 @@ main { flex: 1; min-height: 0; position: relative; }
     return book;
   }
 
+  const TESS_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = res;
+      el.onerror = () => rej(new Error('Text recognition could not load. Check your connection and try again.'));
+      document.head.appendChild(el);
+    });
+  }
+
   async function importPdf(file) {
-    const job = { id: 'j' + Date.now() + Math.random().toString(36).slice(2, 5), name: file.name.replace(/\.pdf$/i, ''), pct: 0, err: '' };
+    const job = { id: 'j' + Date.now() + Math.random().toString(36).slice(2, 5), name: file.name.replace(/\.pdf$/i, ''), pct: 0, err: '', ocr: false, stop: false };
     jobs.push(job); renderLibrary();
+    const setLab = t => { const el = document.getElementById('lab-' + job.id); if (el) el.textContent = t; };
+    const setBar = n => { job.pct = n; const el = document.getElementById('bar-' + job.id); if (el) el.style.width = n + '%'; };
+    let worker = null, wake = null;
     try {
       if (!window.pdfjsLib) throw new Error('The PDF reader could not load. Check your connection and reload.');
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -347,25 +363,76 @@ main { flex: 1; min-height: 0; position: relative; }
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
       let title = job.name.replace(/[_-]+/g, ' ').trim();
       try { const meta = await pdf.getMetadata(); const mt = meta && meta.info && meta.info.Title; if (mt && mt.trim().length > 3) title = mt.trim(); } catch (e) {}
-      const sents = []; let carry = '';
-      for (let p = 1; p <= pdf.numPages; p++) {
+
+      const n = pdf.numPages;
+      const pages = new Array(n + 1).fill('');
+      for (let p = 1; p <= n; p++) {
         const page = await pdf.getPage(p);
         const tc = await page.getTextContent();
-        carry = splitSentences(pageToText(tc.items), p, carry, sents);
-        job.pct = Math.round((p / pdf.numPages) * 100);
-        const bar = document.getElementById('bar-' + job.id); if (bar) bar.style.width = job.pct + '%';
-        const lab = document.getElementById('lab-' + job.id); if (lab) lab.textContent = 'Reading page ' + p + ' of ' + pdf.numPages;
+        pages[p] = pageToText(tc.items);
+        setBar(Math.round((p / n) * 100));
+        setLab('Reading page ' + p + ' of ' + n);
       }
+
+      // Pages with no selectable text are pictures. If most of the book is like that, read them with OCR.
+      const missing = [];
+      for (let p = 1; p <= n; p++) if (pages[p].length < 40) missing.push(p);
+      if (n > 0 && missing.length >= n * 0.6) {
+        job.ocr = true; job.pct = 0; renderLibrary();
+        setLab('Getting text recognition ready');
+        try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+        if (!window.Tesseract) await loadScript(TESS_SRC);
+        let ready = false;
+        worker = await Tesseract.createWorker('eng', 1, {
+          logger: m => {
+            if (ready || !m || typeof m.progress !== 'number') return;
+            setLab('Getting text recognition ready (first time only) ' + Math.round(m.progress * 100) + '%');
+          }
+        });
+        ready = true;
+        const canvas = document.createElement('canvas');
+        let done = 0;
+        for (const p of missing) {
+          if (job.stop) break;
+          setLab('Reading page ' + p + ' of ' + n + ' with text recognition');
+          const page = await pdf.getPage(p);
+          const base = page.getViewport({ scale: 1 });
+          const scale = Math.min(2.5, 2400 / Math.max(base.width, base.height));
+          const vp = page.getViewport({ scale });
+          canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          const res = await worker.recognize(canvas);
+          pages[p] = linesToText((res.data.text || '').split('\n'));
+          done++;
+          setBar(Math.round((done / missing.length) * 100));
+        }
+        canvas.width = 0; canvas.height = 0;
+      }
+
+      const sents = []; let carry = '';
+      for (let p = 1; p <= n; p++) carry = splitSentences(pages[p], p, carry, sents);
       const chunks = groupSentences(sents).map(c => ({ t: c.t, p: c.p }));
-      if (chunks.length < 3) throw new Error('No readable text found. Scanned PDFs are images of pages, so they will not work.');
-      const book = await addBook(title, chunks);
+      if (chunks.length < 3) {
+        throw new Error(job.stop
+          ? 'Stopped before enough text was read. Let it run a little longer next time.'
+          : job.ocr
+            ? 'Text recognition found very little text. The scan may be too faint, or not in English.'
+            : 'No readable text found in this file.');
+      }
+      await addBook(title, chunks);
       jobs = jobs.filter(j => j !== job);
       toast('Added ' + chunks.length + ' snippets');
       renderLibrary();
       if (books.length === 1) showView('feed');
     } catch (e) {
+      job.ocr = false;
       job.err = (e && e.message) ? e.message : 'Could not read this file.';
       renderLibrary();
+    } finally {
+      try { if (worker) await worker.terminate(); } catch (e) {}
+      try { if (wake) await wake.release(); } catch (e) {}
     }
   }
 
@@ -375,7 +442,7 @@ main { flex: 1; min-height: 0; position: relative; }
     'Try mixing books. Kernel takes one snippet from each active book in turn, so a physics passage can sit beside a history one. Switching topics is a form of interleaving, and it tends to help ideas transfer to new situations later on.',
     'Tap the bookmark on any card to keep it. Saved snippets live in their own tab, so you can build a small collection of the passages worth coming back to before an exam or a conversation.',
     'Open the Books tab to add a PDF. The file is read inside your browser, split into short passages and stored on this device. It does not get sent to a server, and you can delete a book at any time.',
-    'Books exported from e-readers or downloaded as digital editions usually work best. PDFs that are scans of paper pages contain pictures of text rather than text itself, so there is nothing for Kernel to slice up.'
+    'Scanned books work too, but they take longer. Kernel reads each page as a picture, which can take several seconds a page, so keep the screen on while it works. You can stop at any point and keep what has been read so far.'
   ].map((t, i) => ({ t, p: i + 1 }));
 
   /* ---------- feed ---------- */
@@ -479,7 +546,7 @@ main { flex: 1; min-height: 0; position: relative; }
       '<div class="row job"><div class="sw" style="--h:265"></div><div class="info"><div class="t">' + esc(j.name) + '</div>' +
       (j.err ? '<div class="m" style="color:#d64550">' + esc(j.err) + '</div>' :
         '<div class="m" id="lab-' + j.id + '">Reading</div><div class="bar"><i id="bar-' + j.id + '" style="width:' + j.pct + '%"></i></div>') +
-      '</div>' + (j.err ? '<button class="del" data-dismiss="' + j.id + '">Dismiss</button>' : '') + '</div>').join('');
+      '</div>' + (j.err ? '<button class="del" data-dismiss="' + j.id + '">Dismiss</button>' : (j.ocr ? '<button class="del" data-stop="' + j.id + '">' + (j.stop ? 'Stopping' : 'Stop and keep') + '</button>' : '')) + '</div>').join('');
     const bookHtml = books.map(b => {
       const pr = Math.min(100, Math.round(((state.progress[b.id] || 0) / b.chunks.length) * 100));
       return '<div class="row" style="--h:' + b.hue + '"><div class="sw"></div><div class="info"><div class="t">' + esc(b.title) + '</div>' +
@@ -489,7 +556,7 @@ main { flex: 1; min-height: 0; position: relative; }
     }).join('');
     L.innerHTML =
       '<h2>Books</h2><p class="sub">Every book you switch on feeds your scroll.</p>' +
-      '<label class="drop"><input class="vh" id="file" type="file" accept="application/pdf,.pdf" multiple><b>Add a PDF</b><small>Read on your device and never uploaded</small></label>' +
+      '<label class="drop"><input class="vh" id="file" type="file" accept="application/pdf,.pdf" multiple><b>Add a PDF</b><small>Scanned books work too. Read on your device, never uploaded</small></label>' +
       jobHtml + bookHtml +
       (books.length ? '<div class="opt"><div>Shuffle snippets<small>Off keeps each book in reading order</small></div><label class="tog" style="--h:265"><input type="checkbox" id="shuf"' + (state.shuffle ? ' checked' : '') + '><span></span></label></div>' : '');
   }
@@ -507,6 +574,8 @@ main { flex: 1; min-height: 0; position: relative; }
       await DB.del(id); books = books.filter(b => b.id !== id); delete state.active[id]; delete state.progress[id];
       persist(); dirty = true; renderLibrary(); return;
     }
+    const st = e.target.closest('[data-stop]');
+    if (st) { const j = jobs.find(j => j.id === st.dataset.stop); if (j) { j.stop = true; renderLibrary(); } return; }
     const x = e.target.closest('[data-dismiss]');
     if (x) { jobs = jobs.filter(j => j.id !== x.dataset.dismiss); renderLibrary(); }
   });
