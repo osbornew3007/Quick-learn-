@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kernel</title>
+<meta name="theme-color" content="#0e0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kernel">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+@property --h { syntax: '<number>'; inherits: true; initial-value: 265; }
+
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg: #f4f1f8;
+  --fg: #1b1826;
+  --muted: #6b6580;
+  --line: rgba(27, 24, 38, .12);
+  --panel: rgba(255, 255, 255, .62);
+  --panel-solid: #ffffff;
+  --gl: 84%;
+  --gl2: 90%;
+  --gs: 72%;
+  --dot-l: 48%;
+  --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e0c14;
+    --fg: #f2eef8;
+    --muted: #a59fb8;
+    --line: rgba(255, 255, 255, .12);
+    --panel: rgba(255, 255, 255, .07);
+    --panel-solid: #1a1724;
+    --gl: 25%;
+    --gl2: 15%;
+    --gs: 62%;
+    --dot-l: 68%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e0c14;
+  --fg: #f2eef8;
+  --muted: #a59fb8;
+  --line: rgba(255, 255, 255, .12);
+  --panel: rgba(255, 255, 255, .07);
+  --panel-solid: #1a1724;
+  --gl: 25%;
+  --gl2: 15%;
+  --gs: 62%;
+  --dot-l: 68%;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, label:focus-within { outline: 2px solid hsl(var(--h) 80% 60%); outline-offset: 2px; }
+.vh { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.hidden { display: none !important; }
+
+#app {
+  --h: 265;
+  transition: --h .8s ease;
+  position: relative;
+  height: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(95% 55% at 12% 0%, hsl(var(--h) var(--gs) var(--gl) / .95), transparent 72%),
+    radial-gradient(85% 50% at 100% 100%, hsl(calc(var(--h) + 45) var(--gs) var(--gl2) / .8), transparent 72%),
+    var(--bg);
+}
+
+/* top bar */
+#top { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 6px; flex: none; }
+.brand { font-family: var(--serif); font-weight: 600; font-size: 24px; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+.brand i { width: 11px; height: 11px; border-radius: 50%; background: hsl(var(--h) 85% var(--dot-l)); display: inline-block; box-shadow: 0 0 0 4px hsl(var(--h) 85% var(--dot-l) / .22); }
+.top-r { display: flex; align-items: center; gap: 8px; }
+.pill { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.icon-btn { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); }
+.icon-btn svg { width: 17px; height: 17px; }
+
+main { flex: 1; min-height: 0; position: relative; }
+.view { position: absolute; inset: 0; }
+
+/* feed */
+#feed { overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; }
+#feed::-webkit-scrollbar { display: none; }
+.card { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; position: relative; display: flex; flex-direction: column; padding: 10px 76px 18px 22px; box-sizing: border-box; }
+.meta { display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; max-width: 100%; padding: 7px 13px 7px 11px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 13px; font-weight: 500; }
+.meta .dot { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--h) 85% var(--dot-l)); flex: none; }
+.meta .bt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta .pg { color: var(--muted); font-weight: 400; flex: none; }
+.body { flex: 1; min-height: 0; display: flex; align-items: center; overflow-y: auto; scrollbar-width: none; }
+.body::-webkit-scrollbar { display: none; }
+.txt { margin: 0; font-family: var(--serif); font-weight: 400; line-height: 1.42; letter-spacing: -.006em; font-variation-settings: 'opsz' 48; text-wrap: pretty; padding: 14px 0; border-left: 3px solid hsl(var(--h) 80% var(--dot-l)); padding-left: 18px; }
+.s1 { font-size: clamp(25px, 6.8vw, 34px); line-height: 1.32; }
+.s2 { font-size: clamp(21px, 5.6vw, 27px); }
+.s3 { font-size: clamp(18px, 4.7vw, 22px); }
+.rail { position: absolute; right: 12px; bottom: 74px; display: flex; flex-direction: column; gap: 14px; }
+.rail button { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: transform .15s ease, background .2s ease; }
+.rail button:active { transform: scale(.9); }
+.rail svg { width: 21px; height: 21px; }
+.rail .on { background: hsl(var(--h) 80% var(--dot-l)); color: #fff; border-color: transparent; }
+.rail .on svg { fill: currentColor; }
+.foot { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--muted); padding-top: 6px; }
+.bar { flex: 1; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 4px; background: hsl(var(--h) 80% var(--dot-l)); }
+
+.empty { height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 30px 40px; box-sizing: border-box; }
+.empty h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(34px, 9.5vw, 46px); line-height: 1.08; letter-spacing: -.025em; margin: 0 0 14px; }
+.empty p { color: var(--muted); font-size: 16px; line-height: 1.5; margin: 0 0 26px; max-width: 32ch; }
+
+.btn { display: inline-block; padding: 14px 22px; border-radius: 999px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 15px; margin-right: 8px; margin-bottom: 8px; }
+.btn.ghost { background: var(--panel); color: var(--fg); border: 1px solid var(--line); }
+
+/* library + saved */
+.scroll { overflow-y: auto; padding: 8px 18px 24px; box-sizing: border-box; overscroll-behavior: contain; }
+.scroll h2 { font-family: var(--serif); font-weight: 500; font-size: 32px; letter-spacing: -.02em; margin: 6px 0 4px; }
+.sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; line-height: 1.45; }
+.drop { display: block; text-align: center; padding: 22px 16px; border: 1.5px dashed var(--line); border-radius: 20px; background: var(--panel); margin-bottom: 16px; cursor: pointer; }
+.drop b { display: block; font-size: 16px; font-weight: 600; margin-bottom: 3px; }
+.drop small { color: var(--muted); font-size: 13px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 10px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.row .sw { width: 12px; align-self: stretch; border-radius: 6px; background: hsl(var(--h) 80% var(--dot-l)); flex: none; }
+.row .info { flex: 1; min-width: 0; }
+.row .t { font-weight: 600; font-size: 15px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row .m { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.row .bar { margin-top: 8px; flex: none; }
+.tog { position: relative; width: 44px; height: 26px; flex: none; }
+.tog input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 2; }
+.tog span { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .2s; }
+.tog span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.tog input:checked + span { background: hsl(var(--h) 75% 50%); }
+.tog input:checked + span::after { transform: translateX(18px); }
+.tog input:focus-visible + span { outline: 2px solid hsl(var(--h) 80% 60%); outline-offset: 2px; }
+.del { font-size: 13px; color: var(--muted); padding: 8px 6px; flex: none; }
+.del.arm { color: #d64550; font-weight: 600; }
+.job .m { margin-bottom: 0; }
+.opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 4px 14px; font-size: 15px; }
+.opt small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.snip { padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 10px; }
+.snip p { font-family: var(--serif); font-size: 17px; line-height: 1.5; margin: 0 0 12px; }
+.snip .sf { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); gap: 10px; }
+.snip .sf span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.snip .sf .d { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--h) 85% var(--dot-l)); flex: none; }
+
+/* nav */
+#nav { flex: none; display: flex; padding: 6px 14px 10px; gap: 6px; border-top: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+#nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 4px; font-size: 12px; font-weight: 500; color: var(--muted); border-radius: 14px; }
+#nav button svg { width: 23px; height: 23px; }
+#nav button.act { color: var(--fg); }
+#nav button.act svg { color: hsl(var(--h) 80% var(--dot-l)); }
+
+#toast { position: absolute; left: 50%; bottom: 86px; transform: translate(-50%, 14px); background: var(--fg); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: 86%; text-align: center; z-index: 20; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  #app { transition: none; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="brand"><i></i>Kernel</div>
+    <div class="top-r">
+      <span class="pill" id="count">0 today</span>
+      <button class="icon-btn" id="themeBtn" aria-label="Switch light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+  <main>
+    <section id="feed" class="view" aria-label="Snippet feed"></section>
+    <section id="library" class="view scroll hidden"></section>
+    <section id="saved" class="view scroll hidden"></section>
+  </main>
+  <nav id="nav">
+    <button data-view="feed" class="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 8h6M9 12h6"/></svg>Learn</button>
+    <button data-view="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>Books</button>
+    <button data-view="saved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>Saved</button>
+  </nav>
+  <div id="toast" role="status"></div>
+</div>
+
+<script>
+(function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const HUES = [265, 18, 160, 330, 205, 45, 120, 350];
+  const ICON = {
+    bookmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>'
+  };
+
+  /* ---------- persistence ---------- */
+  const LS = 'kernel-state-v1';
+  let state = { active: {}, progress: {}, saved: [], shuffle: false, today: { d: '', n: 0 }, theme: '' };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) {}
+  function persist() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+
+  const DB = {
+    db: null, mem: [],
+    open() {
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((res, rej) => {
+        try {
+          const r = indexedDB.open('kernel', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('books', { keyPath: 'id' });
+          r.onsuccess = () => { this.db = r.result; res(this.db); };
+          r.onerror = () => rej(r.error);
+        } catch (e) { rej(e); }
+      });
+    },
+    async all() {
+      try {
+        const db = await this.open();
+        return await new Promise((res, rej) => { const q = db.transaction('books').objectStore('books').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+      } catch (e) { return this.mem; }
+    },
+    async put(b) {
+      try {
+        const db = await this.open();
+        await new Promise((res, rej) => { const t = db.transaction('books', 'readwrite'); t.objectStore('books').put(b); t.oncomplete = res; t.onerror = () => rej(t.error); });
+      } catch (e) { this.mem = this.mem.filter(x => x.id !== b.id).concat(b); }
+    },
+    async del(id) {
+      try {
+        const db = await this.open();
+        await new Promise((res, rej) => { const t = db.transaction('books', 'readwrite'); t.objectStore('books').delete(id); t.oncomplete = res; t.onerror = () => rej(t.error); });
+      } catch (e) { this.mem = this.mem.filter(x => x.id !== id); }
+    }
+  };
+
+  /* ---------- theme ---------- */
+  const root = document.documentElement;
+  if (state.theme) root.dataset.theme = state.theme;
+  const effTheme = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  $('#themeBtn').onclick = () => { const n = effTheme() === 'dark' ? 'light' : 'dark'; root.dataset.theme = n; state.theme = n; persist(); };
+
+  /* ---------- data ---------- */
+  let books = [];
+  let jobs = [];
+  let dirty = true;
+  const app = $('#app');
+  const feedEl = $('#feed');
+  const seen = new Set();
+
+  const activeBooks = () => books.filter(b => state.active[b.id] !== false && b.chunks.length);
+  const todayKey = () => new Date().toISOString().slice(0, 10);
+  function bumpToday() {
+    if (state.today.d !== todayKey()) state.today = { d: todayKey(), n: 0 };
+    state.today.n++;
+    showCount();
+  }
+  function showCount() {
+    const n = state.today.d === todayKey() ? state.today.n : 0;
+    $('#count').textContent = n + ' today';
+  }
+
+  /* ---------- pdf -> snippets ---------- */
+  function pageToText(items) {
+    const lines = []; let line = '';
+    for (const it of items) {
+      if (typeof it.str !== 'string') continue;
+      line += it.str;
+      if (it.hasEOL) { lines.push(line); line = ''; }
+    }
+    if (line) lines.push(line);
+    let out = '';
+    for (let l of lines) {
+      l = l.trim();
+      if (!l || /^\d{1,4}$/.test(l)) continue;
+      if (/\p{L}-$/u.test(out)) out = out.slice(0, -1) + l;
+      else out += (out ? ' ' : '') + l;
+    }
+    return out;
+  }
+  function good(t) {
+    const words = t.split(/\s+/).length;
+    if (words < 20 || words > 170) return false;
+    const letters = (t.match(/\p{L}/gu) || []).length;
+    const digits = (t.match(/\d/g) || []).length;
+    if (letters / t.length < 0.72 || digits / t.length > 0.08) return false;
+    if (/\.{4,}|ISBN|©|all rights reserved|www\./i.test(t)) return false;
+    return true;
+  }
+  function groupSentences(sents) {
+    const out = []; let cur = [], w = 0, pg = 0;
+    for (const { s, p } of sents) {
+      if (!cur.length) pg = p;
+      cur.push(s); w += s.split(/\s+/).length;
+      if (w >= 50) { out.push({ t: cur.join(' '), p: pg }); cur = []; w = 0; }
+    }
+    if (w >= 25) out.push({ t: cur.join(' '), p: pg });
+    return out.filter(c => good(c.t));
+  }
+  function splitSentences(text, page, carryIn, sents) {
+    const re = /[^.!?]*[.!?]+["”’')\]]*(?=\s|$)/g;
+    let carry = (carryIn + ' ' + text).replace(/\s+/g, ' ').trim();
+    let m, last = 0;
+    while ((m = re.exec(carry))) { const s = m[0].trim(); if (s) sents.push({ s, p: page }); last = re.lastIndex; }
+    carry = carry.slice(last);
+    if (carry.length > 1500) { sents.push({ s: carry, p: page }); carry = ''; }
+    return carry;
+  }
+
+  async function addBook(title, chunks) {
+    const id = 'b' + Date.now() + Math.random().toString(36).slice(2, 6);
+    const book = { id, title, hue: HUES[books.length % HUES.length], chunks, added: Date.now() };
+    await DB.put(book);
+    books.push(book);
+    state.active[id] = true;
+    state.progress[id] = 0;
+    persist();
+    dirty = true;
+    return book;
+  }
+
+  async function importPdf(file) {
+    const job = { id: 'j' + Date.now() + Math.random().toString(36).slice(2, 5), name: file.name.replace(/\.pdf$/i, ''), pct: 0, err: '' };
+    jobs.push(job); renderLibrary();
+    try {
+      if (!window.pdfjsLib) throw new Error('The PDF reader could not load. Check your connection and reload.');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let title = job.name.replace(/[_-]+/g, ' ').trim();
+      try { const meta = await pdf.getMetadata(); const mt = meta && meta.info && meta.info.Title; if (mt && mt.trim().length > 3) title = mt.trim(); } catch (e) {}
+      const sents = []; let carry = '';
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const tc = await page.getTextContent();
+        carry = splitSentences(pageToText(tc.items), p, carry, sents);
+        job.pct = Math.round((p / pdf.numPages) * 100);
+        const bar = document.getElementById('bar-' + job.id); if (bar) bar.style.width = job.pct + '%';
+        const lab = document.getElementById('lab-' + job.id); if (lab) lab.textContent = 'Reading page ' + p + ' of ' + pdf.numPages;
+      }
+      const chunks = groupSentences(sents).map(c => ({ t: c.t, p: c.p }));
+      if (chunks.length < 3) throw new Error('No readable text found. Scanned PDFs are images of pages, so they will not work.');
+      const book = await addBook(title, chunks);
+      jobs = jobs.filter(j => j !== job);
+      toast('Added ' + chunks.length + ' snippets');
+      renderLibrary();
+      if (books.length === 1) showView('feed');
+    } catch (e) {
+      job.err = (e && e.message) ? e.message : 'Could not read this file.';
+      renderLibrary();
+    }
+  }
+
+  const DEMO = [
+    'Welcome to Kernel. Every card is one small idea, lifted out of the books you add. Swipe up to move on. The aim is a little progress often, rather than one heroic effort once a week.',
+    'Short bursts work because attention is limited. A single well-chosen paragraph, read properly, tends to stick better than a chapter skimmed while distracted. Small units also make it easy to begin, which is usually the hardest part of studying.',
+    'Try mixing books. Kernel takes one snippet from each active book in turn, so a physics passage can sit beside a history one. Switching topics is a form of interleaving, and it tends to help ideas transfer to new situations later on.',
+    'Tap the bookmark on any card to keep it. Saved snippets live in their own tab, so you can build a small collection of the passages worth coming back to before an exam or a conversation.',
+    'Open the Books tab to add a PDF. The file is read inside your browser, split into short passages and stored on this device. It does not get sent to a server, and you can delete a book at any time.',
+    'Books exported from e-readers or downloaded as digital editions usually work best. PDFs that are scans of paper pages contain pictures of text rather than text itself, so there is nothing for Kernel to slice up.'
+  ].map((t, i) => ({ t, p: i + 1 }));
+
+  /* ---------- feed ---------- */
+  let feed = [], ptr = {}, rr = 0;
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const n = +e.target.dataset.n, f = feed[n];
+      if (!f) continue;
+      app.style.setProperty('--h', f.b.hue);
+      const key = f.b.id + ':' + f.i;
+      if (!seen.has(key)) { seen.add(key); bumpToday(); }
+      if (!state.shuffle) state.progress[f.b.id] = Math.max(state.progress[f.b.id] || 0, Math.min(f.i + 1, f.b.chunks.length));
+      persist();
+      if (n >= feed.length - 4) extend(10);
+    }
+  }, { root: feedEl, threshold: 0.6 });
+
+  function isSaved(k) { return state.saved.some(s => s.k === k); }
+
+  function addCard(f, n) {
+    const c = f.b.chunks[f.i];
+    const words = c.t.split(/\s+/).length;
+    const size = words <= 40 ? 's1' : words <= 75 ? 's2' : 's3';
+    const key = f.b.id + ':' + f.i;
+    const pct = Math.round(((f.i + 1) / f.b.chunks.length) * 100);
+    const el = document.createElement('article');
+    el.className = 'card';
+    el.dataset.n = n;
+    el.style.setProperty('--h', f.b.hue);
+    el.innerHTML =
+      '<div class="meta"><span class="dot"></span><span class="bt">' + esc(f.b.title) + '</span><span class="pg">p. ' + c.p + '</span></div>' +
+      '<div class="body"><p class="txt ' + size + '">' + esc(c.t) + '</p></div>' +
+      '<div class="rail">' +
+        '<button class="save' + (isSaved(key) ? ' on' : '') + '" data-key="' + key + '" aria-label="Save snippet">' + ICON.bookmark + '</button>' +
+        '<button class="copy" aria-label="Copy snippet">' + ICON.copy + '</button>' +
+      '</div>' +
+      '<div class="foot"><div class="bar"><i style="width:' + pct + '%"></i></div><span>' + (f.i + 1) + ' of ' + f.b.chunks.length + '</span></div>';
+    feedEl.appendChild(el);
+    io.observe(el);
+  }
+
+  function extend(n) {
+    const ab = activeBooks(); if (!ab.length) return;
+    for (let k = 0; k < n; k++) {
+      const b = ab[rr++ % ab.length];
+      let p;
+      if (state.shuffle) p = Math.floor(Math.random() * b.chunks.length);
+      else { p = ptr[b.id] || 0; if (p >= b.chunks.length) p = 0; ptr[b.id] = p + 1; }
+      const f = { b, i: p };
+      feed.push(f); addCard(f, feed.length - 1);
+    }
+  }
+
+  function buildFeed() {
+    io.disconnect();
+    feedEl.innerHTML = ''; feed = []; ptr = {}; rr = 0;
+    const ab = activeBooks();
+    if (!ab.length) {
+      feedEl.innerHTML =
+        '<div class="empty"><h1>Turn any book into a scroll.</h1>' +
+        '<p>' + (books.length ? 'All your books are switched off. Turn one on to start.' : 'Add a PDF and Kernel slices it into short ideas you can swipe through, one book or many at once.') + '</p>' +
+        '<div><button class="btn" data-go="library">' + (books.length ? 'Open your books' : 'Add your first book') + '</button>' +
+        (books.length ? '' : '<button class="btn ghost" id="demo">Try a demo deck</button>') + '</div></div>';
+      dirty = false; return;
+    }
+    ab.forEach(b => { const p = state.progress[b.id] || 0; ptr[b.id] = p >= b.chunks.length ? 0 : p; });
+    extend(12);
+    app.style.setProperty('--h', feed[0].b.hue);
+    dirty = false;
+  }
+
+  feedEl.addEventListener('click', async e => {
+    const go = e.target.closest('[data-go]'); if (go) return showView(go.dataset.go);
+    if (e.target.closest('#demo')) {
+      const b = await addBook('How Kernel works', DEMO);
+      showView('feed'); return;
+    }
+    const sv = e.target.closest('.save');
+    if (sv) {
+      const key = sv.dataset.key;
+      if (isSaved(key)) { state.saved = state.saved.filter(s => s.k !== key); sv.classList.remove('on'); toast('Removed from saved'); }
+      else {
+        const n = +sv.closest('.card').dataset.n, f = feed[n], c = f.b.chunks[f.i];
+        state.saved.unshift({ k: key, t: c.t, title: f.b.title, hue: f.b.hue, p: c.p });
+        sv.classList.add('on'); toast('Saved');
+      }
+      persist(); return;
+    }
+    const cp = e.target.closest('.copy');
+    if (cp) {
+      const n = +cp.closest('.card').dataset.n, f = feed[n];
+      try { await navigator.clipboard.writeText(f.b.chunks[f.i].t); toast('Copied'); } catch (err) { toast('Copy is not available here'); }
+    }
+  });
+
+  /* ---------- library ---------- */
+  function renderLibrary() {
+    const L = $('#library');
+    const jobHtml = jobs.map(j =>
+      '<div class="row job"><div class="sw" style="--h:265"></div><div class="info"><div class="t">' + esc(j.name) + '</div>' +
+      (j.err ? '<div class="m" style="color:#d64550">' + esc(j.err) + '</div>' :
+        '<div class="m" id="lab-' + j.id + '">Reading</div><div class="bar"><i id="bar-' + j.id + '" style="width:' + j.pct + '%"></i></div>') +
+      '</div>' + (j.err ? '<button class="del" data-dismiss="' + j.id + '">Dismiss</button>' : '') + '</div>').join('');
+    const bookHtml = books.map(b => {
+      const pr = Math.min(100, Math.round(((state.progress[b.id] || 0) / b.chunks.length) * 100));
+      return '<div class="row" style="--h:' + b.hue + '"><div class="sw"></div><div class="info"><div class="t">' + esc(b.title) + '</div>' +
+        '<div class="m">' + b.chunks.length + ' snippets, ' + pr + '% read</div><div class="bar"><i style="width:' + pr + '%"></i></div></div>' +
+        '<label class="tog" aria-label="Include in feed"><input type="checkbox" data-tog="' + b.id + '"' + (state.active[b.id] !== false ? ' checked' : '') + '><span></span></label>' +
+        '<button class="del" data-del="' + b.id + '">Delete</button></div>';
+    }).join('');
+    L.innerHTML =
+      '<h2>Books</h2><p class="sub">Every book you switch on feeds your scroll.</p>' +
+      '<label class="drop"><input class="vh" id="file" type="file" accept="application/pdf,.pdf" multiple><b>Add a PDF</b><small>Read on your device and never uploaded</small></label>' +
+      jobHtml + bookHtml +
+      (books.length ? '<div class="opt"><div>Shuffle snippets<small>Off keeps each book in reading order</small></div><label class="tog" style="--h:265"><input type="checkbox" id="shuf"' + (state.shuffle ? ' checked' : '') + '><span></span></label></div>' : '');
+  }
+
+  $('#library').addEventListener('change', e => {
+    if (e.target.id === 'file') { [...e.target.files].forEach(importPdf); e.target.value = ''; return; }
+    if (e.target.dataset.tog) { state.active[e.target.dataset.tog] = e.target.checked; persist(); dirty = true; return; }
+    if (e.target.id === 'shuf') { state.shuffle = e.target.checked; persist(); dirty = true; }
+  });
+  $('#library').addEventListener('click', async e => {
+    const d = e.target.closest('[data-del]');
+    if (d) {
+      if (!d.classList.contains('arm')) { d.classList.add('arm'); d.textContent = 'Sure?'; setTimeout(() => { d.classList.remove('arm'); d.textContent = 'Delete'; }, 3000); return; }
+      const id = d.dataset.del;
+      await DB.del(id); books = books.filter(b => b.id !== id); delete state.active[id]; delete state.progress[id];
+      persist(); dirty = true; renderLibrary(); return;
+    }
+    const x = e.target.closest('[data-dismiss]');
+    if (x) { jobs = jobs.filter(j => j.id !== x.dataset.dismiss); renderLibrary(); }
+  });
+
+  /* ---------- saved ---------- */
+  function renderSaved() {
+    const S = $('#saved');
+    S.innerHTML = '<h2>Saved</h2><p class="sub">' + (state.saved.length ? 'Passages worth coming back to.' : 'Tap the bookmark on a card to keep it here.') + '</p>' +
+      state.saved.map(s =>
+        '<div class="snip" style="--h:' + s.hue + '"><p>' + esc(s.t) + '</p><div class="sf"><span><i class="d"></i>' + esc(s.title) + ', p. ' + s.p + '</span><button class="del" data-rm="' + esc(s.k) + '">Remove</button></div></div>').join('');
+  }
+  $('#saved').addEventListener('click', e => {
+    const r = e.target.closest('[data-rm]'); if (!r) return;
+    state.saved = state.saved.filter(s => s.k !== r.dataset.rm); persist(); renderSaved();
+  });
+
+  /* ---------- nav + toast ---------- */
+  let tt;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
+  function showView(v) {
+    ['feed', 'library', 'saved'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
+    document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('act', b.dataset.view === v));
+    if (v === 'feed' && dirty) buildFeed();
+    if (v === 'library') renderLibrary();
+    if (v === 'saved') renderSaved();
+    if (v !== 'feed') app.style.setProperty('--h', 265);
+    else if (feed[0]) { const cards = feedEl.querySelectorAll('.card'); }
+  }
+  $('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.view); });
+
+  /* ---------- init ---------- */
+  (async function init() {
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    books = (await DB.all()).sort((a, b) => a.added - b.added);
+    showCount();
+    buildFeed();
+  })();
+})();
+</script>
+</body>
+</html>
