@@ -109,9 +109,14 @@ main { flex: 1; min-height: 0; position: relative; }
 .meta .dot { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--h) 85% var(--dot-l)); flex: none; }
 .meta .bt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta .pg { color: var(--muted); font-weight: 400; flex: none; }
-.body { flex: 1; min-height: 0; display: flex; align-items: center; overflow-y: auto; scrollbar-width: none; }
+.body { flex: 1; min-height: 0; display: flex; align-items: flex-start; overflow-y: auto; scrollbar-width: none; }
+.col { width: 100%; margin: auto 0; box-sizing: border-box; border-left: 3px solid hsl(var(--h) 80% var(--dot-l)); padding: 14px 0 14px 18px; }
+.ttl { font-family: var(--sans); font-weight: 600; font-size: 15px; line-height: 1.3; margin: 0 0 10px; color: hsl(var(--h) 55% calc(var(--dot-l) - 6%)); }
 .body::-webkit-scrollbar { display: none; }
-.txt { margin: 0; font-family: var(--serif); font-weight: 400; line-height: 1.42; letter-spacing: -.006em; font-variation-settings: 'opsz' 48; text-wrap: pretty; padding: 14px 0; border-left: 3px solid hsl(var(--h) 80% var(--dot-l)); padding-left: 18px; }
+.txt { margin: 0; font-family: var(--serif); font-weight: 400; line-height: 1.42; letter-spacing: -.006em; font-variation-settings: 'opsz' 48; text-wrap: pretty; }
+.txt.swap { animation: swap .4s ease; }
+@keyframes swap { from { opacity: 0; } to { opacity: 1; } }
+.ai-st { white-space: nowrap; }
 .s1 { font-size: clamp(25px, 6.8vw, 34px); line-height: 1.32; }
 .s2 { font-size: clamp(21px, 5.6vw, 27px); }
 .s3 { font-size: clamp(18px, 4.7vw, 22px); }
@@ -163,6 +168,17 @@ main { flex: 1; min-height: 0; position: relative; }
 .snip .sf span { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .snip .sf .d { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--h) 85% var(--dot-l)); flex: none; }
 
+.ai { margin-top: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+.ai h3 { font-family: var(--serif); font-weight: 500; font-size: 23px; letter-spacing: -.015em; margin: 0 0 6px; }
+.field { width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--fg); font: inherit; font-size: 16px; margin-bottom: 12px; }
+.fine { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 6px 0 0; }
+.fine a { color: inherit; }
+.snip h4 { font-family: var(--sans); font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+
+.seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 14px; }
+.seg button { flex: 1; padding: 10px 6px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.seg button.act { background: var(--panel-solid); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+
 /* nav */
 #nav { flex: none; display: flex; padding: 6px 14px 10px; gap: 6px; border-top: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 #nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 4px; font-size: 12px; font-weight: 500; color: var(--muted); border-radius: 14px; }
@@ -175,7 +191,7 @@ main { flex: 1; min-height: 0; position: relative; }
 
 @media (prefers-reduced-motion: reduce) {
   #app { transition: none; }
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
 }
 </style>
 </head>
@@ -210,23 +226,36 @@ main { flex: 1; min-height: 0; position: relative; }
   const HUES = [265, 18, 160, 330, 205, 45, 120, 350];
   const ICON = {
     bookmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>',
-    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>'
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l1.9 5.6L18.5 10.5l-5.6 1.9L11 18l-1.9-5.6L3.5 10.5l5.6-1.9z"/><path d="M19 3v4M17 5h4"/></svg>'
   };
 
   /* ---------- persistence ---------- */
   const LS = 'kernel-state-v1';
-  let state = { active: {}, progress: {}, saved: [], shuffle: false, today: { d: '', n: 0 }, theme: '' };
+  let state = { active: {}, progress: {}, saved: [], shuffle: false, today: { d: '', n: 0 }, theme: '', ai: false };
   try { Object.assign(state, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) {}
   function persist() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
 
   const DB = {
-    db: null, mem: [],
+    db: null, mem: [], aimem: new Map(),
+    async aiGet(k) {
+      try { const db = await this.open(); return await new Promise((res, rej) => { const q = db.transaction('ai').objectStore('ai').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
+      catch (e) { return this.aimem.get(k) || null; }
+    },
+    async aiPut(k, v) {
+      try { const db = await this.open(); await new Promise((res, rej) => { const t = db.transaction('ai', 'readwrite'); t.objectStore('ai').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+      catch (e) { this.aimem.set(k, v); }
+    },
+    async aiDelBook(id) {
+      for (const k of [...this.aimem.keys()]) if (k.startsWith(id + ':')) this.aimem.delete(k);
+      try { const db = await this.open(); await new Promise((res, rej) => { const t = db.transaction('ai', 'readwrite'); t.objectStore('ai').delete(IDBKeyRange.bound(id + ':', id + ':\uffff')); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch (e) {}
+    },
     open() {
       if (this.db) return Promise.resolve(this.db);
       return new Promise((res, rej) => {
         try {
-          const r = indexedDB.open('kernel', 1);
-          r.onupgradeneeded = () => r.result.createObjectStore('books', { keyPath: 'id' });
+          const r = indexedDB.open('kernel', 2);
+          r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('books')) d.createObjectStore('books', { keyPath: 'id' }); if (!d.objectStoreNames.contains('ai')) d.createObjectStore('ai'); };
           r.onsuccess = () => { this.db = r.result; res(this.db); };
           r.onerror = () => rej(r.error);
         } catch (e) { rej(e); }
@@ -445,6 +474,200 @@ main { flex: 1; min-height: 0; position: relative; }
     'Scanned books work too, but they take longer. Kernel reads each page as a picture, which can take several seconds a page, so keep the screen on while it works. You can stop at any point and keep what has been read so far.'
   ].map((t, i) => ({ t, p: i + 1 }));
 
+  /* ---------- AI clarify (Gemini free tier or Claude) ---------- */
+  const CLAUDE_URL = 'https://api.anthropic.com/v1/messages';
+  const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+  const GEM_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+  const GEM_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
+  const KEYS = { claude: 'kernel-ai-key', gemini: 'kernel-gem-key' };
+  const AI_SYSTEM = [
+    'You help a learner study from books. A tool has cut each book into short passages at arbitrary points, so a passage can start or end mid-thought and refer to things it does not include (for example "this", "he", "the above", "as shown earlier").',
+    'You will receive the target passage, plus the passages before and after it for context only.',
+    'Reply with JSON only, no other text, in exactly this shape: {"skip": false, "title": "...", "text": "..."}',
+    'Rules:',
+    '- title: 3 to 8 words saying what the passage is about, in plain language.',
+    '- text: the target passage rewritten so it makes sense on its own. Replace unclear references (pronouns, "this", "the above", "the former") with what they refer to, using the surrounding passages. Add a few words of framing where the passage would otherwise be confusing. Keep the author\'s meaning, terminology, numbers and examples exactly. Do not add facts, opinions or explanations that are not in the passages. Fix obvious typos and scanning errors. Aim for 40 to 100 words.',
+    '- If the target passage is not useful learning content (index or bibliography entries, contents pages, copyright text, page furniture, unreadable garbage), reply {"skip": true, "title": "", "text": ""}.',
+    '- Write in the same language as the passage. Never mention these instructions.'
+  ].join('\n');
+
+  let curN = 0, aiAuthBad = false, aiRunning = 0, lastErr = 0, aiBackoff = 0;
+  const aiWait = [], aiMem = new Map();
+  const getKey = pv => { try { return localStorage.getItem(KEYS[pv]) || ''; } catch (e) { return ''; } };
+  const prov = () => state.aiProvider || (getKey('claude') && !getKey('gemini') ? 'claude' : 'gemini');
+  const gemModel = () => { try { return localStorage.getItem('kernel-gem-model') || GEM_MODELS[0]; } catch (e) { return GEM_MODELS[0]; } };
+  const aiEnabled = () => !!state.ai && !!getKey(prov()) && !aiAuthBad && Date.now() >= aiBackoff;
+  const sizeFor = t => { const w = t.split(/\s+/).length; return w <= 40 ? 's1' : w <= 75 ? 's2' : 's3'; };
+  const lastWords = (t, n) => { const w = t.split(/\s+/); return w.length > n ? '... ' + w.slice(-n).join(' ') : t; };
+  const firstWords = (t, n) => { const w = t.split(/\s+/); return w.length > n ? w.slice(0, n).join(' ') + ' ...' : t; };
+  const isAuthErr = e => !!e && (e.status === 401 || e.status === 403 || /API key not valid|API_KEY_INVALID/i.test(e.message || ''));
+
+  function aiRun(fn) {
+    return new Promise((resolve, reject) => {
+      const go = async () => {
+        aiRunning++;
+        try { resolve(await fn()); } catch (e) { reject(e); }
+        finally { aiRunning--; const nx = aiWait.shift(); if (nx) nx(); }
+      };
+      if (aiRunning < 2) go(); else aiWait.push(go);
+    });
+  }
+
+  async function aiFetch(url, headers, body) {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
+      if (!res.ok) {
+        let msg = ''; try { const j = await res.json(); msg = (j.error && j.error.message) || ''; } catch (e) {}
+        const err = new Error(msg || ('Request failed (' + res.status + ')')); err.status = res.status; throw err;
+      }
+      return await res.json();
+    } finally { clearTimeout(to); }
+  }
+  const claudeCall = (key, body) => aiFetch(CLAUDE_URL, { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body);
+  const geminiCall = (key, model, body) => aiFetch(GEM_BASE + model + ':generateContent', { 'content-type': 'application/json', 'x-goog-api-key': key }, body);
+
+  async function callAI(f) {
+    const c = f.b.chunks[f.i], prev = f.b.chunks[f.i - 1], next = f.b.chunks[f.i + 1];
+    const user = 'Book: ' + f.b.title +
+      '\n\n<previous_passage>\n' + (prev ? lastWords(prev.t, 90) : '(none)') + '\n</previous_passage>' +
+      '\n\n<target_passage>\n' + c.t + '\n</target_passage>' +
+      '\n\n<next_passage>\n' + (next ? firstWords(next.t, 90) : '(none)') + '\n</next_passage>';
+    let text;
+    if (prov() === 'claude') {
+      const d = await claudeCall(getKey('claude'), { model: CLAUDE_MODEL, max_tokens: 500, system: AI_SYSTEM, messages: [{ role: 'user', content: user }] });
+      text = (d.content || []).filter(x => x.type === 'text').map(x => x.text).join('');
+    } else {
+      const d = await geminiCall(getKey('gemini'), gemModel(), {
+        systemInstruction: { parts: [{ text: AI_SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.3, responseMimeType: 'application/json' }
+      });
+      const cand = (d.candidates || [])[0];
+      text = ((cand && cand.content && cand.content.parts) || []).map(x => x.text || '').join('');
+    }
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('Unexpected reply');
+    const o = JSON.parse(m[0]);
+    const out = { skip: !!o.skip, title: String(o.title || '').trim(), text: String(o.text || '').trim() };
+    if (!out.skip && out.text.length < 20) throw new Error('Unexpected reply');
+    return out;
+  }
+
+  function aiError(err) {
+    if (isAuthErr(err)) aiAuthBad = true;
+    if (err && err.status === 429) aiBackoff = Date.now() + 60000;
+    const now = Date.now();
+    if (now - lastErr < 10000) return;
+    lastErr = now;
+    if (isAuthErr(err)) toast('Your AI key was rejected. Check it in Books.', 4500);
+    else if (err && err.status === 429) toast('AI limit reached for now. Showing the original text.', 4500);
+    else if (err && /credit/i.test(err.message || '')) toast('Your Anthropic account is out of credit.', 4500);
+    else toast('AI is unavailable right now. Showing the original text.', 3500);
+  }
+
+  async function enhance(n) {
+    const f = feed[n];
+    if (!f || f.aiState || !aiEnabled()) return;
+    f.aiState = 'loading';
+    const k = f.b.id + ':' + f.i;
+    try {
+      let r = aiMem.get(k) || await DB.aiGet(k);
+      if (!r) {
+        r = await aiRun(() => callAI(f));
+        await DB.aiPut(k, r);
+      }
+      aiMem.set(k, r);
+      f.ai = r; f.aiState = r.skip ? 'skip' : 'done';
+      applyAI(n);
+    } catch (err) {
+      f.aiState = 'failed';
+      aiError(err);
+    }
+  }
+
+  function cardEl(n) { return feedEl.querySelector('.card[data-n="' + n + '"]'); }
+  function applyAI(n) {
+    const f = feed[n], el = cardEl(n);
+    if (!f || !el) return;
+    if (f.aiState === 'skip') {
+      if (n !== curN) { io.unobserve(el); el.remove(); return; }
+      el.querySelector('.ai-st').textContent = 'Probably filler';
+      return;
+    }
+    if (f.aiState === 'done') renderAI(n, true);
+  }
+  function renderAI(n, animate) {
+    const f = feed[n], el = cardEl(n);
+    if (!f || !el || !f.ai) return;
+    const showAI = f.showAI !== false;
+    const text = showAI ? f.ai.text : f.b.chunks[f.i].t;
+    const txt = el.querySelector('.txt'), ttl = el.querySelector('.ttl'), tog = el.querySelector('.ai-tog');
+    txt.textContent = text;
+    txt.className = 'txt ' + sizeFor(text);
+    if (animate !== false) { void txt.offsetWidth; txt.classList.add('swap'); }
+    ttl.textContent = f.ai.title;
+    ttl.classList.toggle('hidden', !(showAI && f.ai.title));
+    tog.classList.remove('hidden');
+    tog.classList.toggle('on', showAI);
+    el.querySelector('.ai-st').textContent = showAI ? 'Clarified with AI' : 'Original text';
+  }
+
+  function explainErr(pv, err) {
+    if (isAuthErr(err)) return pv === 'gemini' ? 'Google rejected that key. Check that you copied all of it, and that it came from Google AI Studio.' : 'That key was rejected. Check that you copied all of it.';
+    if (err.status === 429) return 'The key looks valid, but the free limit is used up right now. Try again in a minute.';
+    if (/credit/i.test(err.message || '')) return 'The key is valid, but the account has no credit yet. Add credit in the Console, then try again.';
+    if (err.status) return String(err.message || 'Something went wrong.').slice(0, 160);
+    return 'Could not reach the service. Check your connection and try again.';
+  }
+  async function saveKey() {
+    const pv = prov(), inp = $('#akey'), st = $('#astatus');
+    const val = ((inp && inp.value) || '').trim();
+    if (pv === 'claude' && !/^sk-ant-/.test(val)) { st.textContent = 'That does not look like an Anthropic key. Keys start with sk-ant-'; return; }
+    if (pv === 'gemini' && (val.length < 20 || /\s/.test(val))) { st.textContent = 'That does not look like a Gemini key. Copy the whole key from Google AI Studio.'; return; }
+    st.textContent = 'Checking the key...';
+    let okModel = '';
+    try {
+      if (pv === 'claude') {
+        await claudeCall(val, { model: CLAUDE_MODEL, max_tokens: 8, messages: [{ role: 'user', content: 'Reply with: ok' }] });
+      } else {
+        for (const m of GEM_MODELS) {
+          try {
+            await geminiCall(val, m, { contents: [{ role: 'user', parts: [{ text: 'Reply with: ok' }] }], generationConfig: { maxOutputTokens: 64 } });
+            okModel = m; break;
+          } catch (e) { if (e.status === 404) continue; throw e; }
+        }
+        if (!okModel) { const e = new Error('No free Gemini model was found. The model names may have changed.'); e.status = 404; throw e; }
+      }
+    } catch (err) { st.textContent = explainErr(pv, err); return; }
+    try {
+      localStorage.setItem(KEYS[pv], val);
+      if (okModel) localStorage.setItem('kernel-gem-model', okModel);
+    } catch (e) { st.textContent = 'This browser would not let Kernel store the key.'; return; }
+    state.aiProvider = pv; state.ai = true; aiAuthBad = false; aiBackoff = 0; persist(); dirty = true;
+    renderLibrary(); toast('AI clarifying is on');
+  }
+  function removeKey() {
+    try { localStorage.removeItem(KEYS[prov()]); } catch (e) {}
+    state.ai = false; persist(); dirty = true; renderLibrary(); toast('Key removed');
+  }
+  function aiSection() {
+    const pv = prov(), has = !!getKey(pv);
+    const note = pv === 'gemini'
+      ? 'Free, with no card needed. Google may use content sent through the free tier to improve its products, and daily limits apply. Each snippet you read is sent to Google. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a key</a>'
+      : 'This uses your own Anthropic API account, which is billed separately from a Claude subscription. Expect roughly $1 to $2 per 1,000 snippets. Each snippet you read is sent to Anthropic. <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Get a key</a>';
+    return '<div class="ai"><h3>Clearer snippets with AI</h3>' +
+      '<p class="sub">The AI rewrites each snippet so it makes sense on its own, gives it a short title, and skips filler like contents pages. The original is one tap away.</p>' +
+      '<div class="seg"><button data-prov="gemini" class="' + (pv === 'gemini' ? 'act' : '') + '">Gemini, free</button><button data-prov="claude" class="' + (pv === 'claude' ? 'act' : '') + '">Claude, paid</button></div>' +
+      (has
+        ? '<div class="opt"><div>Clarify snippets<small>Works a few cards ahead as you scroll</small></div><label class="tog" style="--h:265"><input type="checkbox" id="aion"' + (state.ai ? ' checked' : '') + '><span></span></label></div>' +
+          '<div class="opt"><div>API key saved<small>Stored only on this device</small></div><button class="del" id="aremove">Remove</button></div>'
+        : '<input class="field" id="akey" type="password" placeholder="Paste your ' + (pv === 'gemini' ? 'Gemini' : 'Anthropic') + ' API key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+          '<button class="btn" id="asave">Save and test</button><div class="fine" id="astatus"></div>') +
+      '<p class="fine">' + note + '</p></div>';
+  }
+
   /* ---------- feed ---------- */
   let feed = [], ptr = {}, rr = 0;
   const io = new IntersectionObserver(entries => {
@@ -458,6 +681,7 @@ main { flex: 1; min-height: 0; position: relative; }
       if (!state.shuffle) state.progress[f.b.id] = Math.max(state.progress[f.b.id] || 0, Math.min(f.i + 1, f.b.chunks.length));
       persist();
       if (n >= feed.length - 4) extend(10);
+      curN = n; for (let k = 0; k < 4; k++) enhance(n + k);
     }
   }, { root: feedEl, threshold: 0.6 });
 
@@ -465,8 +689,7 @@ main { flex: 1; min-height: 0; position: relative; }
 
   function addCard(f, n) {
     const c = f.b.chunks[f.i];
-    const words = c.t.split(/\s+/).length;
-    const size = words <= 40 ? 's1' : words <= 75 ? 's2' : 's3';
+    const size = sizeFor(c.t);
     const key = f.b.id + ':' + f.i;
     const pct = Math.round(((f.i + 1) / f.b.chunks.length) * 100);
     const el = document.createElement('article');
@@ -475,12 +698,13 @@ main { flex: 1; min-height: 0; position: relative; }
     el.style.setProperty('--h', f.b.hue);
     el.innerHTML =
       '<div class="meta"><span class="dot"></span><span class="bt">' + esc(f.b.title) + '</span><span class="pg">p. ' + c.p + '</span></div>' +
-      '<div class="body"><p class="txt ' + size + '">' + esc(c.t) + '</p></div>' +
+      '<div class="body"><div class="col"><h3 class="ttl hidden"></h3><p class="txt ' + size + '">' + esc(c.t) + '</p></div></div>' +
       '<div class="rail">' +
+        '<button class="ai-tog hidden" aria-label="Switch between clarified and original text">' + ICON.spark + '</button>' +
         '<button class="save' + (isSaved(key) ? ' on' : '') + '" data-key="' + key + '" aria-label="Save snippet">' + ICON.bookmark + '</button>' +
         '<button class="copy" aria-label="Copy snippet">' + ICON.copy + '</button>' +
       '</div>' +
-      '<div class="foot"><div class="bar"><i style="width:' + pct + '%"></i></div><span>' + (f.i + 1) + ' of ' + f.b.chunks.length + '</span></div>';
+      '<div class="foot"><div class="bar"><i style="width:' + pct + '%"></i></div><span class="ai-st"></span><span>' + (f.i + 1) + ' of ' + f.b.chunks.length + '</span></div>';
     feedEl.appendChild(el);
     io.observe(el);
   }
@@ -512,6 +736,7 @@ main { flex: 1; min-height: 0; position: relative; }
     ab.forEach(b => { const p = state.progress[b.id] || 0; ptr[b.id] = p >= b.chunks.length ? 0 : p; });
     extend(12);
     app.style.setProperty('--h', feed[0].b.hue);
+    curN = 0; for (let k = 0; k < 4; k++) enhance(k);
     dirty = false;
   }
 
@@ -521,13 +746,16 @@ main { flex: 1; min-height: 0; position: relative; }
       const b = await addBook('How Kernel works', DEMO);
       showView('feed'); return;
     }
+    const at = e.target.closest('.ai-tog');
+    if (at) { const n = +at.closest('.card').dataset.n, f = feed[n]; f.showAI = (f.showAI === false); renderAI(n, true); return; }
     const sv = e.target.closest('.save');
     if (sv) {
       const key = sv.dataset.key;
       if (isSaved(key)) { state.saved = state.saved.filter(s => s.k !== key); sv.classList.remove('on'); toast('Removed from saved'); }
       else {
         const n = +sv.closest('.card').dataset.n, f = feed[n], c = f.b.chunks[f.i];
-        state.saved.unshift({ k: key, t: c.t, title: f.b.title, hue: f.b.hue, p: c.p });
+        const shown = (f.aiState === 'done' && f.showAI !== false) ? f.ai : null;
+        state.saved.unshift({ k: key, t: shown ? shown.text : c.t, h: shown ? shown.title : '', title: f.b.title, hue: f.b.hue, p: c.p });
         sv.classList.add('on'); toast('Saved');
       }
       persist(); return;
@@ -535,7 +763,7 @@ main { flex: 1; min-height: 0; position: relative; }
     const cp = e.target.closest('.copy');
     if (cp) {
       const n = +cp.closest('.card').dataset.n, f = feed[n];
-      try { await navigator.clipboard.writeText(f.b.chunks[f.i].t); toast('Copied'); } catch (err) { toast('Copy is not available here'); }
+      try { await navigator.clipboard.writeText(cp.closest('.card').querySelector('.txt').textContent); toast('Copied'); } catch (err) { toast('Copy is not available here'); }
     }
   });
 
@@ -558,20 +786,25 @@ main { flex: 1; min-height: 0; position: relative; }
       '<h2>Books</h2><p class="sub">Every book you switch on feeds your scroll.</p>' +
       '<label class="drop"><input class="vh" id="file" type="file" accept="application/pdf,.pdf" multiple><b>Add a PDF</b><small>Scanned books work too. Read on your device, never uploaded</small></label>' +
       jobHtml + bookHtml +
-      (books.length ? '<div class="opt"><div>Shuffle snippets<small>Off keeps each book in reading order</small></div><label class="tog" style="--h:265"><input type="checkbox" id="shuf"' + (state.shuffle ? ' checked' : '') + '><span></span></label></div>' : '');
+      (books.length ? '<div class="opt"><div>Shuffle snippets<small>Off keeps each book in reading order</small></div><label class="tog" style="--h:265"><input type="checkbox" id="shuf"' + (state.shuffle ? ' checked' : '') + '><span></span></label></div>' : '') + aiSection();
   }
 
   $('#library').addEventListener('change', e => {
     if (e.target.id === 'file') { [...e.target.files].forEach(importPdf); e.target.value = ''; return; }
     if (e.target.dataset.tog) { state.active[e.target.dataset.tog] = e.target.checked; persist(); dirty = true; return; }
+    if (e.target.id === 'aion') { state.ai = e.target.checked; aiAuthBad = false; persist(); dirty = true; return; }
     if (e.target.id === 'shuf') { state.shuffle = e.target.checked; persist(); dirty = true; }
   });
   $('#library').addEventListener('click', async e => {
+    const pvb = e.target.closest('[data-prov]');
+    if (pvb) { state.aiProvider = pvb.dataset.prov; aiAuthBad = false; aiBackoff = 0; persist(); dirty = true; renderLibrary(); return; }
+    if (e.target.closest('#asave')) return saveKey();
+    if (e.target.closest('#aremove')) { removeKey(); return; }
     const d = e.target.closest('[data-del]');
     if (d) {
       if (!d.classList.contains('arm')) { d.classList.add('arm'); d.textContent = 'Sure?'; setTimeout(() => { d.classList.remove('arm'); d.textContent = 'Delete'; }, 3000); return; }
       const id = d.dataset.del;
-      await DB.del(id); books = books.filter(b => b.id !== id); delete state.active[id]; delete state.progress[id];
+      await DB.del(id); await DB.aiDelBook(id); books = books.filter(b => b.id !== id); delete state.active[id]; delete state.progress[id];
       persist(); dirty = true; renderLibrary(); return;
     }
     const st = e.target.closest('[data-stop]');
@@ -585,7 +818,7 @@ main { flex: 1; min-height: 0; position: relative; }
     const S = $('#saved');
     S.innerHTML = '<h2>Saved</h2><p class="sub">' + (state.saved.length ? 'Passages worth coming back to.' : 'Tap the bookmark on a card to keep it here.') + '</p>' +
       state.saved.map(s =>
-        '<div class="snip" style="--h:' + s.hue + '"><p>' + esc(s.t) + '</p><div class="sf"><span><i class="d"></i>' + esc(s.title) + ', p. ' + s.p + '</span><button class="del" data-rm="' + esc(s.k) + '">Remove</button></div></div>').join('');
+        '<div class="snip" style="--h:' + s.hue + '">' + (s.h ? '<h4>' + esc(s.h) + '</h4>' : '') + '<p>' + esc(s.t) + '</p><div class="sf"><span><i class="d"></i>' + esc(s.title) + ', p. ' + s.p + '</span><button class="del" data-rm="' + esc(s.k) + '">Remove</button></div></div>').join('');
   }
   $('#saved').addEventListener('click', e => {
     const r = e.target.closest('[data-rm]'); if (!r) return;
@@ -594,7 +827,7 @@ main { flex: 1; min-height: 0; position: relative; }
 
   /* ---------- nav + toast ---------- */
   let tt;
-  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
+  function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), ms || 1800); }
   function showView(v) {
     ['feed', 'library', 'saved'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
     document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('act', b.dataset.view === v));
